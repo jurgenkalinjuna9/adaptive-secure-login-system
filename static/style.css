@@ -1,0 +1,513 @@
+/* ============================================================
+   GLOBAL PAGE STYLING
+   ============================================================ */
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+
+    font-family:
+        "Segoe UI",
+        Arial,
+        Helvetica,
+        sans-serif;
+
+    background:
+        radial-gradient(
+            circle at 15% 20%,
+            rgba(20, 184, 166, 0.15),
+            transparent 30%
+        ),
+        radial-gradient(
+            circle at 85% 80%,
+            rgba(59, 130, 246, 0.13),
+            transparent 30%
+        ),
+        #08111f;
+
+    color: #f8fafc;
+}
+
+
+/* ============================================================
+   MAIN AUTHENTICATION LAYOUT
+   ============================================================ */
+
+.auth-page {
+    min-height: 100vh;
+
+    display: grid;
+
+    grid-template-columns:
+        minmax(0, 1.1fr)
+        minmax(420px, 0.9fr);
+
+    max-width: 1200px;
+
+    margin: auto;
+
+    padding: 55px 35px;
+
+    gap: 70px;
+
+    align-items: center;
+}
+
+
+/* ============================================================
+   LEFT SECURITY PANEL
+   ============================================================ */
+
+.security-panel {
+    padding: 20px;
+}
+
+.security-badge {
+    display: inline-block;
+
+    padding: 8px 14px;
+
+    margin-bottom: 22px;
+
+    border-radius: 20px;
+
+    border:
+        1px solid rgba(45, 212, 191, 0.35);
+
+    background:
+        rgba(20, 184, 166, 0.08);
+
+    color: #5eead4;
+
+    font-size: 12px;
+
+    font-weight: 700;
+
+    letter-spacing: 1px;
+}
+
+.security-panel h1 {
+    max-width: 620px;
+
+    margin:
+        0
+        0
+        20px;
+
+    font-size: 52px;
+
+    line-height: 1.05;
+
+    letter-spacing: -1.8px;
+}
+
+.system-description {
+    max-width: 590px;
+
+    color: #aebdce;
+
+    font-size: 17px;
+
+    line-height: 1.7;
+}
+
+
+/* ============================================================
+   SECURITY FEATURE LIST
+   ============================================================ */
+
+.security-features {
+    margin-top: 35px;
+
+    display: grid;
+
+    gap: 16px;
+}
+
+.security-feature {
+    display: flex;
+
+    align-items: center;
+
+    gap: 15px;
+
+    padding: 15px;
+
+    max-width: 560px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.07);
+
+    border-radius: 12px;
+
+    background:
+        rgba(255, 255, 255, 0.035);
+}
+
+.feature-icon {
+    width: 42px;
+
+    height: 42px;
+
+    min-width: 42px;
+
+    border-radius: 10px;
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    background:
+        rgba(20, 184, 166, 0.12);
+
+    color: #5eead4;
+
+    font-size: 12px;
+
+    font-weight: 800;
+}
+
+.security-feature strong {
+    display: block;
+
+    margin-bottom: 4px;
+
+    color: #f8fafc;
+}
+
+.security-feature span {
+    color: #8fa3b8;
+
+    font-size: 13px;
+
+    line-height: 1.5;
+}
+
+
+/* ============================================================
+   REGISTRATION CARD
+   ============================================================ */
+
+.auth-card {
+    width: 100%;
+
+    padding: 38px;
+
+    border-radius: 20px;
+
+    background:
+        rgba(255, 255, 255, 0.97);
+
+    color: #0f172a;
+
+    box-shadow:
+        0 25px 70px rgba(0, 0, 0, 0.4);
+}
+
+.auth-card-header {
+    margin-bottom: 27px;
+}
+
+.card-label {
+    margin-bottom: 9px;
+
+    color: #0f766e;
+
+    font-size: 11px;
+
+    font-weight: 800;
+
+    letter-spacing: 1.2px;
+}
+
+.auth-card-header h2 {
+    margin:
+        0
+        0
+        9px;
+
+    font-size: 30px;
+
+    letter-spacing: -0.5px;
+}
+
+.auth-card-header p {
+    margin: 0;
+
+    color: #64748b;
+
+    line-height: 1.55;
+
+    font-size: 14px;
+}
+
+
+/* ============================================================
+   FORM ELEMENTS
+   ============================================================ */
+
+.form-group {
+    margin-bottom: 19px;
+}
+
+.form-group label {
+    display: block;
+
+    margin-bottom: 7px;
+
+    color: #334155;
+
+    font-size: 13px;
+
+    font-weight: 700;
+}
+
+.form-group input {
+    width: 100%;
+
+    padding: 13px 14px;
+
+    border:
+        1px solid #cbd5e1;
+
+    border-radius: 9px;
+
+    background: #f8fafc;
+
+    color: #0f172a;
+
+    font-size: 14px;
+
+    transition:
+        border-color 0.2s,
+        box-shadow 0.2s,
+        background 0.2s;
+}
+
+.form-group input:focus {
+    outline: none;
+
+    border-color: #0f766e;
+
+    background: white;
+
+    box-shadow:
+        0 0 0 3px rgba(15, 118, 110, 0.1);
+}
+
+.field-help {
+    display: block;
+
+    margin-top: 6px;
+
+    color: #94a3b8;
+
+    font-size: 11px;
+}
+
+/* ============================================================
+   PASSWORD VISIBILITY CONTROL
+   ============================================================ */
+
+.password-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-wrapper input {
+    width: 100%;
+
+    /* Leaves room for the Show/Hide button */
+    padding-right: 68px;
+}
+
+.password-toggle {
+    position: absolute;
+
+    right: 12px;
+    top: 50%;
+
+    transform: translateY(-50%);
+
+    border: none;
+    background: transparent;
+
+    cursor: pointer;
+
+    padding: 4px 6px;
+
+    color: #0f766e;
+
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.password-toggle:hover {
+    color: #155e75;
+}
+
+.password-toggle:focus {
+    outline: 2px solid rgba(15, 118, 110, 0.25);
+    outline-offset: 2px;
+
+    border-radius: 4px;
+}
+
+/* ============================================================
+   BUTTON
+   ============================================================ */
+
+.auth-button {
+    width: 100%;
+
+    padding: 14px;
+
+    margin-top: 5px;
+
+    border: none;
+
+    border-radius: 9px;
+
+    cursor: pointer;
+
+    background:
+        linear-gradient(
+            135deg,
+            #0f766e,
+            #155e75
+        );
+
+    color: white;
+
+    font-size: 14px;
+
+    font-weight: 700;
+
+    transition:
+        transform 0.15s,
+        box-shadow 0.15s;
+}
+
+.auth-button:hover {
+    transform:
+        translateY(-1px);
+
+    box-shadow:
+        0 10px 20px
+        rgba(15, 118, 110, 0.2);
+}
+
+
+/* ============================================================
+   FLASH MESSAGES
+   ============================================================ */
+
+.alert {
+    margin-bottom: 20px;
+
+    padding: 12px 14px;
+
+    border-radius: 8px;
+
+    font-size: 13px;
+}
+
+.alert.error {
+    background: #fef2f2;
+
+    color: #991b1b;
+
+    border:
+        1px solid #fecaca;
+}
+
+.alert.success {
+    background: #ecfdf5;
+
+    color: #065f46;
+
+    border:
+        1px solid #a7f3d0;
+}
+
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+
+.auth-footer {
+    margin:
+        22px
+        0
+        0;
+
+    text-align: center;
+
+    color: #64748b;
+
+    font-size: 13px;
+}
+
+.auth-footer a {
+    color: #0f766e;
+
+    font-weight: 700;
+
+    text-decoration: none;
+}
+
+.auth-footer a:hover {
+    text-decoration: underline;
+}
+
+.security-note {
+    margin-top: 20px;
+
+    padding-top: 17px;
+
+    border-top:
+        1px solid #e2e8f0;
+
+    text-align: center;
+
+    color: #94a3b8;
+
+    font-size: 11px;
+
+    line-height: 1.5;
+}
+
+
+/* ============================================================
+   MOBILE / SMALL SCREEN SUPPORT
+   ============================================================ */
+
+@media (max-width: 850px) {
+
+    .auth-page {
+        grid-template-columns: 1fr;
+
+        padding:
+            30px
+            20px;
+
+        gap: 35px;
+    }
+
+    .security-panel h1 {
+        font-size: 38px;
+    }
+
+    .auth-card {
+        max-width: 500px;
+
+        margin: auto;
+    }
+}

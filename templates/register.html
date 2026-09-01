@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+```
+<meta charset="UTF-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
+<title>Register | Adaptive Secure Login System</title>
+
+<!-- Shared application stylesheet -->
+<link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='style.css') }}"
+>
+```
+
+</head>
+
+<body>
+
+```
+<main class="auth-page">
+
+    <!-- =====================================================
+         SYSTEM INFORMATION PANEL
+         ===================================================== -->
+
+    <section class="security-panel">
+
+        <div class="security-badge">
+            ADAPTIVE SECURE LOGIN SYSTEM
+        </div>
+
+        <h1>
+            Risk-aware authentication prototype.
+        </h1>
+
+        <p class="system-description">
+            This prototype investigates how authentication decisions
+            can respond to different indicators of login risk.
+        </p>
+
+
+        <div class="security-features">
+
+            <!-- Risk indicator 1 -->
+            <div class="security-feature">
+
+                <div class="feature-icon">
+                    01
+                </div>
+
+                <div>
+
+                    <strong>
+                        Failed Login Attempts
+                    </strong>
+
+                    <span>
+                        Repeated unsuccessful authentication attempts.
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <!-- Risk indicator 2 -->
+            <div class="security-feature">
+
+                <div class="feature-icon">
+                    02
+                </div>
+
+                <div>
+
+                    <strong>
+                        Device Recognition
+                    </strong>
+
+                    <span>
+                        Login attempts from new or previously unknown devices.
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <!-- Risk indicator 3 -->
+            <div class="security-feature">
+
+                <div class="feature-icon">
+                    03
+                </div>
+
+                <div>
+
+                    <strong>
+                        Network Changes
+                    </strong>
+
+                    <span>
+                        Changes in IP information associated with login activity.
+                    </span>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         REGISTRATION PANEL
+         ===================================================== -->
+
+    <section class="auth-card">
+
+        <div class="auth-card-header">
+
+            <div class="card-label">
+                SECURE REGISTRATION
+            </div>
+
+            <h2>
+                Create an account
+            </h2>
+
+            <p>
+                Register your credentials to access the authentication
+                prototype.
+            </p>
+
+        </div>
+
+
+        <!-- =====================================================
+             FLASK FEEDBACK MESSAGES
+             ===================================================== -->
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+
+            {% if messages %}
+
+                {% for category, message in messages %}
+
+                    <div class="alert {{ category }}">
+                        {{ message }}
+                    </div>
+
+                {% endfor %}
+
+            {% endif %}
+
+        {% endwith %}
+
+
+        <!-- =====================================================
+             REGISTRATION FORM
+             ===================================================== -->
+
+        <form method="POST">
+
+            <!-- Username field -->
+            <div class="form-group">
+
+                <label for="username">
+                    Username
+                </label>
+
+                <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    placeholder="Choose your username"
+                    autocomplete="username"
+                    minlength="3"
+                    required
+                >
+
+            </div>
+
+
+            <!-- Password field -->
+            <div class="form-group">
+
+                <label for="password">
+                    Password
+                </label>
+
+                <div class="password-wrapper">
+
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Create a secure password"
+                        autocomplete="new-password"
+                        minlength="8"
+                        required
+                    >
+
+                    <button
+                        type="button"
+                        class="password-toggle"
+                        onclick="togglePassword('password', this)"
+                        aria-label="Show password"
+                        title="Show password"
+                    >
+                        Show
+                    </button>
+
+                </div>
+
+                <span class="field-help">
+                    Minimum 8 characters.
+                </span>
+
+            </div>
+
+
+            <!-- Confirm password field -->
+            <div class="form-group">
+
+                <label for="confirm_password">
+                    Confirm Password
+                </label>
+
+                <div class="password-wrapper">
+
+                    <input
+                        type="password"
+                        id="confirm_password"
+                        name="confirm_password"
+                        placeholder="Re-enter your password"
+                        autocomplete="new-password"
+                        minlength="8"
+                        required
+                    >
+
+                    <button
+                        type="button"
+                        class="password-toggle"
+                        onclick="togglePassword('confirm_password', this)"
+                        aria-label="Show password"
+                        title="Show password"
+                    >
+                        Show
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <!-- Registration submit button -->
+            <button
+                type="submit"
+                class="auth-button"
+            >
+                Create Secure Account
+            </button>
+
+        </form>
+
+
+        <!-- Link for existing users -->
+        <p class="auth-footer">
+
+            Already registered?
+
+            <a href="{{ url_for('login') }}">
+                Sign in
+            </a>
+
+        </p>
+
+
+        <!-- Security information -->
+        <div class="security-note">
+
+            Passwords are protected using secure one-way hashing
+            before database storage.
+
+        </div>
+
+    </section>
+
+</main>
+
+
+<!-- =====================================================
+     SHARED JAVASCRIPT
+     ===================================================== -->
+
+<script
+    src="{{ url_for('static', filename='script.js') }}"
+></script>
+```
+
+</body>
+
+</html>
