@@ -511,3 +511,25 @@ body {
         margin: auto;
     }
 }
+
+
+/* ============================================================
+   DASHBOARD LOGOUT BUTTON
+   ============================================================ */
+
+/*
+   The logout control is an anchor inside the footer.
+   This rule keeps its text clearly visible against
+   the teal authentication button background.
+*/
+.auth-footer a.auth-button {
+    display: inline-block;
+    color: #ffffff;
+    text-decoration: none;
+}
+
+/* Keep the text visible when the user hovers over the button. */
+.auth-footer a.auth-button:hover {
+    color: #ffffff;
+    text-decoration: none;
+}

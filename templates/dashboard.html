@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Dashboard | Adaptive Secure Login System</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+<body>
+
+    <main class="auth-page">
+
+        <section class="auth-card">
+
+            <div class="auth-card-header">
+
+                <div class="card-label">
+                    STATIC AUTHENTICATION
+                </div>
+
+                <h2>
+                    Dashboard
+                </h2>
+
+                <p>
+                    You have successfully authenticated using
+                    the static username and password login process.
+                </p>
+
+            </div>
+
+
+            <div class="dashboard-content">
+
+                <p>
+                    Signed in as:
+                    <strong>{{ username }}</strong>
+                </p>
+
+                <p>
+                    This page confirms that the current
+                    static authentication process has succeeded.
+                </p>
+
+            </div>
+
+
+            <div class="auth-footer">
+
+                <a
+                    href="{{ url_for('logout') }}"
+                    class="auth-button"
+                >
+                    Log out
+                </a>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</body>
+
+</html>

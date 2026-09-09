@@ -28,7 +28,7 @@
             <div class="auth-card-header">
 
                 <div class="card-label">
-                    SECURE LOGIN
+                    STATIC LOGIN
                 </div>
 
                 <h2>
@@ -36,8 +36,109 @@
                 </h2>
 
                 <p>
-                    Authentication functionality will be implemented
-                    in the next development stage.
+                    Enter your registered username and password
+                    to access the authentication prototype.
+                </p>
+
+            </div>
+
+
+            <!-- Display Flask flash messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+
+                {% if messages %}
+
+                    <div class="flash-messages">
+
+                        {% for category, message in messages %}
+
+                            <div class="flash-message {{ category }}">
+                                {{ message }}
+                            </div>
+
+                        {% endfor %}
+
+                    </div>
+
+                {% endif %}
+
+            {% endwith %}
+
+
+            <!-- Static username and password login form -->
+            <form
+                method="POST"
+                action="{{ url_for('login') }}"
+                class="auth-form"
+            >
+
+                <div class="form-group">
+
+                    <label for="username">
+                        Username
+                    </label>
+
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        placeholder="Enter your username"
+                        required
+                        autocomplete="username"
+                    >
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="password">
+                        Password
+                    </label>
+
+                    <div class="password-wrapper">
+
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            placeholder="Enter your password"
+                            required
+                            autocomplete="current-password"
+                        >
+
+                        <button
+                            type="button"
+                            class="password-toggle"
+                            onclick="togglePassword('password', this)"
+                            aria-label="Show password"
+                            title="Show password"
+                        >
+                            Show
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <button
+                    type="submit"
+                    class="auth-button"
+                >
+                    Sign in
+                </button>
+
+            </form>
+
+
+            <div class="auth-footer">
+
+                <p>
+                    Do not have an account?
+                    <a href="{{ url_for('register') }}">
+                        Register
+                    </a>
                 </p>
 
             </div>
@@ -45,6 +146,11 @@
         </section>
 
     </main>
+
+
+    <script
+        src="{{ url_for('static', filename='script.js') }}"
+    ></script>
 
 </body>
 

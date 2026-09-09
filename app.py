@@ -1,15 +1,33 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
-from werkzeug.security import generate_password_hash
+import os
+
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    session
+)
+
+from werkzeug.security import generate_password_hash, check_password_hash
 from mysql.connector import IntegrityError
+from dotenv import load_dotenv
+
 from database import get_db_connection
+
+
+# Load environment variables stored in the local .env file.
+load_dotenv()
+
 
 # Create the Flask application.
 app = Flask(__name__)
 
-# Flask uses the secret key to securely sign session data and flash messages.
-# We will later move this into the .env file with the other sensitive settings.
-app.secret_key = "development-secret-key"
 
+# Flask uses this secret key to securely sign session data.
+# The value is stored in .env rather than directly in the source code.
+app.secret_key = os.getenv("FLASK_SECRET_KEY")
 
 @app.route("/")
 def home():
@@ -126,16 +144,140 @@ def register():
     return render_template("register.html")
 
 
-@app.route("/login")
+@app.route("/login", methods=["GET", "POST"])
 def login():
     """
-    Temporary login page.
+    Authenticate a registered user using the static
+    username and password login process.
 
-    Actual authentication logic will be implemented
-    immediately after registration is complete.
+    GET:
+        Display the login form.
+
+    POST:
+        Check the submitted credentials against
+        the user record stored in MySQL.
     """
+
+    if request.method == "POST":
+
+        # Remove unnecessary spaces from the username.
+        username = request.form["username"].strip()
+
+        # Retrieve the password entered by the user.
+        password = request.form["password"]
+
+        connection = None
+        cursor = None
+
+        try:
+            # Connect to the adaptive_login database.
+            connection = get_db_connection()
+
+            # dictionary=True allows us to access returned
+            # database fields using their column names.
+            cursor = connection.cursor(dictionary=True)
+
+            # Retrieve the matching user account.
+            # Parameterised SQL protects against SQL injection.
+            cursor.execute(
+                """
+                SELECT id, username, password_hash
+                FROM users
+                WHERE username = %s
+                """,
+                (username,)
+            )
+
+            user = cursor.fetchone()
+
+            # -------------------------------------------------
+            # STATIC PASSWORD VERIFICATION
+            # -------------------------------------------------
+
+            # Only authenticate if the username exists
+            # and the entered password matches the stored hash.
+            if user and check_password_hash(
+                user["password_hash"],
+                password
+            ):
+
+                # Store the authenticated user's details
+                # in the Flask session.
+                session["user_id"] = user["id"]
+                session["username"] = user["username"]
+
+                flash(
+                    "Login successful.",
+                    "success"
+                )
+
+                # Temporary destination until the dashboard
+                # route is implemented.
+                return redirect(url_for("dashboard"))
+
+            # Use one generic message for both an unknown
+            # username and an incorrect password.
+            #
+            # This avoids revealing whether a particular
+            # username exists in the system.
+            flash(
+                "Invalid username or password.",
+                "error"
+            )
+
+        finally:
+
+            # Always close database resources after use.
+            if cursor:
+                cursor.close()
+
+            if connection:
+                connection.close()
+
     return render_template("login.html")
 
+
+@app.route("/dashboard")
+def dashboard():
+    """
+    Display the protected dashboard.
+
+    Only users with a valid authenticated session
+    are allowed to access this page.
+    """
+
+    # Check whether the user has successfully logged in.
+    if "user_id" not in session:
+
+        flash(
+            "Please sign in to access the dashboard.",
+            "error"
+        )
+
+        return redirect(url_for("login"))
+
+    # Pass the authenticated username to the dashboard template.
+    return render_template(
+        "dashboard.html",
+        username=session["username"]
+    )
+
+
+@app.route("/logout")
+def logout():
+    """
+    End the authenticated user's session.
+    """
+
+    # Remove all stored session data.
+    session.clear()
+
+    flash(
+        "You have been logged out successfully.",
+        "success"
+    )
+
+    return redirect(url_for("login"))
 
 if __name__ == "__main__":
     # Debug mode is suitable for local development only.
