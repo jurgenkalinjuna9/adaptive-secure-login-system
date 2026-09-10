@@ -1,4 +1,5 @@
 import os
+import time
 
 from flask import (
     Flask,
@@ -150,6 +151,9 @@ def login():
     Authenticate a registered user using the static
     username and password login process.
 
+    Each login attempt is also recorded in the
+    login_attempts table for later testing and evaluation.
+
     GET:
         Display the login form.
 
@@ -160,11 +164,19 @@ def login():
 
     if request.method == "POST":
 
+        # Record the time when authentication processing begins.
+        start_time = time.perf_counter()
+
         # Remove unnecessary spaces from the username.
         username = request.form["username"].strip()
 
         # Retrieve the password entered by the user.
         password = request.form["password"]
+
+        # Record the IP address associated with the request.
+        # On the local Flask development server this will
+        # normally appear as 127.0.0.1.
+        ip_address = request.remote_addr
 
         connection = None
         cursor = None
@@ -173,8 +185,8 @@ def login():
             # Connect to the adaptive_login database.
             connection = get_db_connection()
 
-            # dictionary=True allows us to access returned
-            # database fields using their column names.
+            # dictionary=True allows database values to be
+            # accessed using their column names.
             cursor = connection.cursor(dictionary=True)
 
             # Retrieve the matching user account.
@@ -194,12 +206,40 @@ def login():
             # STATIC PASSWORD VERIFICATION
             # -------------------------------------------------
 
-            # Only authenticate if the username exists
-            # and the entered password matches the stored hash.
             if user and check_password_hash(
                 user["password_hash"],
                 password
             ):
+
+                # Calculate how long authentication took.
+                response_time_ms = (
+                    time.perf_counter() - start_time
+                ) * 1000
+
+                # Record the successful login attempt.
+                cursor.execute(
+                    """
+                    INSERT INTO login_attempts (
+                        user_id,
+                        username,
+                        ip_address,
+                        success,
+                        action_taken,
+                        response_time_ms
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        user["id"],
+                        username,
+                        ip_address,
+                        True,
+                        "Login allowed",
+                        response_time_ms
+                    )
+                )
+
+                connection.commit()
 
                 # Store the authenticated user's details
                 # in the Flask session.
@@ -211,15 +251,52 @@ def login():
                     "success"
                 )
 
-                # Temporary destination until the dashboard
-                # route is implemented.
                 return redirect(url_for("dashboard"))
 
-            # Use one generic message for both an unknown
-            # username and an incorrect password.
+            # -------------------------------------------------
+            # FAILED STATIC LOGIN
+            # -------------------------------------------------
+
+            # Calculate the response time for the failed attempt.
+            response_time_ms = (
+                time.perf_counter() - start_time
+            ) * 1000
+
+            # A valid username may have been found even though
+            # the supplied password was incorrect.
             #
-            # This avoids revealing whether a particular
-            # username exists in the system.
+            # If the username does not exist, user_id remains NULL.
+            user_id = user["id"] if user else None
+
+            # Record the failed login attempt.
+            cursor.execute(
+                """
+                INSERT INTO login_attempts (
+                    user_id,
+                    username,
+                    ip_address,
+                    success,
+                    action_taken,
+                    response_time_ms
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    user_id,
+                    username,
+                    ip_address,
+                    False,
+                    "Login rejected",
+                    response_time_ms
+                )
+            )
+
+            connection.commit()
+
+            # Use the same message for an unknown username
+            # and an incorrect password.
+            #
+            # This avoids revealing whether an account exists.
             flash(
                 "Invalid username or password.",
                 "error"
@@ -235,7 +312,6 @@ def login():
                 connection.close()
 
     return render_template("login.html")
-
 
 @app.route("/dashboard")
 def dashboard():
