@@ -29,6 +29,9 @@ app = Flask(__name__)
 # Flask uses this secret key to securely sign session data.
 # The value is stored in .env rather than directly in the source code.
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
+# Temporary restriction duration used for KR1 testing.
+# A short period keeps the prototype practical to evaluate.
+KR1_RESTRICTION_SECONDS = 60
 
 @app.route("/")
 def home():
@@ -148,49 +151,42 @@ def register():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """
-    Authenticate a registered user using the static
-    username and password login process.
+    Authenticate a registered user using username and password.
 
-    Each login attempt is also recorded in the
-    login_attempts table for later testing and evaluation.
+    The login process also records authentication events and
+    counts consecutive failed login attempts.
 
-    GET:
-        Display the login form.
-
-    POST:
-        Check the submitted credentials against
-        the user record stored in MySQL.
+    This failed-attempt count forms the first risk indicator
+    used by the adaptive authentication system.
     """
 
     if request.method == "POST":
 
-        # Record the time when authentication processing begins.
+        # Record when authentication processing begins.
         start_time = time.perf_counter()
 
-        # Remove unnecessary spaces from the username.
+        # Retrieve the submitted credentials.
         username = request.form["username"].strip()
-
-        # Retrieve the password entered by the user.
         password = request.form["password"]
 
-        # Record the IP address associated with the request.
-        # On the local Flask development server this will
-        # normally appear as 127.0.0.1.
+        # Record the IP address associated with this request.
+        # During local testing this will normally be 127.0.0.1.
         ip_address = request.remote_addr
 
         connection = None
         cursor = None
 
         try:
-            # Connect to the adaptive_login database.
+            # Connect to MySQL.
             connection = get_db_connection()
 
-            # dictionary=True allows database values to be
-            # accessed using their column names.
+            # Return database results as dictionaries.
             cursor = connection.cursor(dictionary=True)
 
-            # Retrieve the matching user account.
-            # Parameterised SQL protects against SQL injection.
+            # -------------------------------------------------
+            # FIND THE USER
+            # -------------------------------------------------
+
             cursor.execute(
                 """
                 SELECT id, username, password_hash
@@ -203,7 +199,53 @@ def login():
             user = cursor.fetchone()
 
             # -------------------------------------------------
-            # STATIC PASSWORD VERIFICATION
+            # KR1: CHECK FOR ACTIVE TEMPORARY RESTRICTION
+            # -------------------------------------------------
+
+            # Find the most recent KR1 restriction trigger for
+            # this username. Only the trigger event is checked,
+            # so repeated blocked attempts do not extend the timer.
+            cursor.execute(
+                """
+                SELECT
+                    TIMESTAMPDIFF(
+                        SECOND,
+                        created_at,
+                        NOW()
+                    ) AS seconds_since_restriction
+                FROM login_attempts
+                WHERE username = %s
+                AND action_taken = %s
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (
+                   username,
+                   "Temporary restriction recommended"
+                )
+            )
+
+            restriction = cursor.fetchone()
+
+            if restriction:
+
+                seconds_since_restriction = (
+                    restriction["seconds_since_restriction"]
+                )
+
+                if (
+                     seconds_since_restriction
+                     < KR1_RESTRICTION_SECONDS
+                ):
+
+                      flash(
+                          "Login temporarily restricted due to repeated failed attempts. Please try again shortly.",
+                          "error"
+                      )
+
+                      return render_template("login.html")
+            # -------------------------------------------------
+            # SUCCESSFUL AUTHENTICATION
             # -------------------------------------------------
 
             if user and check_password_hash(
@@ -211,12 +253,14 @@ def login():
                 password
             ):
 
-                # Calculate how long authentication took.
                 response_time_ms = (
                     time.perf_counter() - start_time
                 ) * 1000
 
-                # Record the successful login attempt.
+                # A successful login starts a new authentication
+                # sequence, so the consecutive failure count is 0.
+                failed_attempts = 0
+
                 cursor.execute(
                     """
                     INSERT INTO login_attempts (
@@ -224,16 +268,18 @@ def login():
                         username,
                         ip_address,
                         success,
+                        failed_attempts,
                         action_taken,
                         response_time_ms
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         user["id"],
                         username,
                         ip_address,
                         True,
+                        failed_attempts,
                         "Login allowed",
                         response_time_ms
                     )
@@ -241,8 +287,7 @@ def login():
 
                 connection.commit()
 
-                # Store the authenticated user's details
-                # in the Flask session.
+                # Create the authenticated Flask session.
                 session["user_id"] = user["id"]
                 session["username"] = user["username"]
 
@@ -254,21 +299,90 @@ def login():
                 return redirect(url_for("dashboard"))
 
             # -------------------------------------------------
-            # FAILED STATIC LOGIN
+            # FAILED LOGIN ATTEMPT
             # -------------------------------------------------
 
-            # Calculate the response time for the failed attempt.
+            # Find the most recent successful login for this
+            # username. Any failures after this point belong
+            # to the current failed-login sequence.
+            cursor.execute(
+                """
+                SELECT MAX(id) AS last_success_id
+                FROM login_attempts
+                WHERE username = %s
+                AND success = 1
+                """,
+                (username,)
+            )
+
+            result = cursor.fetchone()
+
+            last_success_id = result["last_success_id"]
+
+            # If the account has never logged in successfully,
+            # start counting from the beginning of its history.
+            if last_success_id is None:
+                last_success_id = 0
+
+            # Count previous failed attempts that occurred after
+            # the most recent successful authentication.
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS failure_count
+                FROM login_attempts
+                WHERE username = %s
+                AND success = 0
+                AND id > %s
+                """,
+                (
+                    username,
+                    last_success_id
+                )
+            )
+
+            result = cursor.fetchone()
+
+            # Add the current failed attempt to the previous count.
+            failed_attempts = result["failure_count"] + 1
+
+
+            # -------------------------------------------------
+            # KR1: FAILED-LOGIN RISK SCORE
+            # -------------------------------------------------
+
+            # Assign a risk contribution based on the number
+            # of consecutive failed authentication attempts.
+            #
+            # 0-2 failures = 0 points
+            # 3-4 failures = 2 points
+            # 5+ failures  = 4 points
+            if failed_attempts >= 5:
+                risk_score = 4
+                risk_level = "High"
+                action_taken = "Temporary restriction recommended"
+
+            elif failed_attempts >= 3:
+                risk_score = 2
+                risk_level = "Medium"
+                action_taken = "Additional verification recommended"
+
+            else:
+               risk_score = 0
+               risk_level = "Low"
+               action_taken = "Login rejected"
+
+
+           # Measure the total authentication processing time.
             response_time_ms = (
-                time.perf_counter() - start_time
+               time.perf_counter() - start_time
             ) * 1000
 
-            # A valid username may have been found even though
-            # the supplied password was incorrect.
-            #
-            # If the username does not exist, user_id remains NULL.
+            # If the username exists, associate the attempt
+            # with the corresponding user ID.
+            # Unknown usernames are stored with user_id = NULL.
             user_id = user["id"] if user else None
 
-            # Record the failed login attempt.
+            # Record the failed authentication attempt.
             cursor.execute(
                 """
                 INSERT INTO login_attempts (
@@ -276,35 +390,53 @@ def login():
                     username,
                     ip_address,
                     success,
+                    failed_attempts,
+                    risk_score,
+                    risk_level,
                     action_taken,
                     response_time_ms
                 )
-                VALUES (%s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     user_id,
                     username,
                     ip_address,
                     False,
-                    "Login rejected",
+                    failed_attempts,
+                    risk_score,
+                    risk_level,
+                    action_taken,
                     response_time_ms
                 )
             )
 
             connection.commit()
 
-            # Use the same message for an unknown username
-            # and an incorrect password.
-            #
-            # This avoids revealing whether an account exists.
-            flash(
-                "Invalid username or password.",
-                "error"
-            )
+            # Display a response based on the detected KR1 risk level.
+            if risk_level == "High":
 
+                flash(
+                   "High-risk login activity detected. Access is temporarily restricted.",
+                   "error"
+                )
+
+            elif risk_level == "Medium":
+
+                flash(
+                   "Multiple failed login attempts detected. Additional verification may be required.",
+                   "error"
+                )
+
+            else:
+
+                flash(
+                   "Invalid username or password.",
+                   "error"
+                )
         finally:
 
-            # Always close database resources after use.
+            # Always release database resources.
             if cursor:
                 cursor.close()
 
