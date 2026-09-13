@@ -1,5 +1,6 @@
 import os
 import time
+import uuid
 
 from flask import (
     Flask,
@@ -173,6 +174,17 @@ def login():
         # During local testing this will normally be 127.0.0.1.
         ip_address = request.remote_addr
 
+        # -------------------------------------------------
+        # KR2: DEVICE IDENTIFIER
+        # -------------------------------------------------
+
+        # Read the device identifier stored in the browser.
+        device_id = request.cookies.get("device_id")
+
+        # If this browser does not yet have a device ID,
+        # generate a new random identifier.
+        if not device_id:
+            device_id = str(uuid.uuid4())
         connection = None
         cursor = None
 
@@ -197,6 +209,44 @@ def login():
             )
 
             user = cursor.fetchone()
+
+            # -------------------------------------------------
+            # KR2: CHECK WHETHER DEVICE IS TRUSTED
+            # -------------------------------------------------
+
+            # Assume the device is not trusted until a matching
+            # record is found for the authenticated username.
+            is_known_device = False
+
+            if user:
+
+                cursor.execute(
+                    """
+                    SELECT id
+                    FROM trusted_devices
+                    WHERE user_id = %s
+                    AND device_id = %s
+                    LIMIT 1
+                    """,
+                    (
+                     user["id"],
+                     device_id
+                    )
+                )
+
+                trusted_device = cursor.fetchone()
+
+                if trusted_device:
+                    is_known_device = True
+
+
+                # Assign the KR2 risk contribution.
+                # Known device = 0 points
+                # Unknown device = 2 points
+                if is_known_device:
+                   device_risk_score = 0
+                else:
+                   device_risk_score = 2
 
             # -------------------------------------------------
             # KR1: CHECK FOR ACTIVE TEMPORARY RESTRICTION
@@ -267,25 +317,53 @@ def login():
                         user_id,
                         username,
                         ip_address,
+                        device_id,
                         success,
                         failed_attempts,
+                        risk_score,
                         action_taken,
                         response_time_ms
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         user["id"],
                         username,
                         ip_address,
+                        device_id,
                         True,
                         failed_attempts,
+                        device_risk_score,
                         "Login allowed",
                         response_time_ms
                     )
                 )
 
                 connection.commit()
+
+                # -------------------------------------------------
+                # KR2: REGISTER NEW TRUSTED DEVICE
+                # -------------------------------------------------
+
+                # If this authenticated browser is not already
+                # trusted for the user, store its device identifier.
+                if not is_known_device:
+
+                    cursor.execute(
+                        """
+                        INSERT INTO trusted_devices (
+                            user_id,
+                            device_id
+                        )
+                        VALUES (%s, %s)
+                        """,
+                        (
+                           user["id"],
+                           device_id
+                        )
+                    )
+
+                    connection.commit()
 
                 # Create the authenticated Flask session.
                 session["user_id"] = user["id"]
@@ -296,7 +374,20 @@ def login():
                     "success"
                 )
 
-                return redirect(url_for("dashboard"))
+                # Create the successful login response.
+                response = redirect(url_for("dashboard"))
+
+                # Store the device identifier in the browser so the
+                # same browser can be recognised on future logins.
+                response.set_cookie(
+                    "device_id",
+                     device_id,
+                     max_age=60 * 60 * 24 * 30,
+                     httponly=True,
+                     samesite="Lax"
+                )
+
+                return response
 
             # -------------------------------------------------
             # FAILED LOGIN ATTEMPT
