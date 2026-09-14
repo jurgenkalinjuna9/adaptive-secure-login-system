@@ -30,6 +30,52 @@ app = Flask(__name__)
 # Flask uses this secret key to securely sign session data.
 # The value is stored in .env rather than directly in the source code.
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
+# -------------------------------------------------
+# KR3: CLIENT IP ADDRESS
+# -------------------------------------------------
+
+def get_client_ip():
+    """
+    Return the IP address used for risk assessment.
+
+    During local development, Flask normally sees every request
+    as 127.0.0.1. A test-only header can therefore be used while
+    debug mode is enabled to simulate a different client IP.
+
+    In normal operation, the real request address is used.
+    """
+
+    test_ip = request.headers.get("X-Test-IP")
+
+    # Only allow simulated IP addresses during local debug testing.
+    if app.debug and test_ip:
+        return test_ip
+
+    return request.remote_addr
+
+# -------------------------------------------------
+# COMBINED RISK CLASSIFICATION
+# -------------------------------------------------
+
+def classify_risk(risk_score):
+    """
+    Convert the combined KR1, KR2 and KR3 score
+    into one overall authentication risk level.
+
+    0-2 points = Low
+    3-4 points = Medium
+    5+ points  = High
+    """
+
+    if risk_score >= 5:
+        return "High"
+
+    if risk_score >= 3:
+        return "Medium"
+
+    return "Low"
+
+
 # Temporary restriction duration used for KR1 testing.
 # A short period keeps the prototype practical to evaluate.
 KR1_RESTRICTION_SECONDS = 60
@@ -40,7 +86,6 @@ def home():
     Basic home route used to confirm that the Flask application is running.
     """
     return redirect(url_for("register"))
-
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -172,7 +217,7 @@ def login():
 
         # Record the IP address associated with this request.
         # During local testing this will normally be 127.0.0.1.
-        ip_address = request.remote_addr
+        ip_address = get_client_ip()
 
         # -------------------------------------------------
         # KR2: DEVICE IDENTIFIER
@@ -247,7 +292,46 @@ def login():
                    device_risk_score = 0
                 else:
                    device_risk_score = 2
+                   
 
+            # -------------------------------------------------
+            # KR3: CHECK WHETHER IP ADDRESS IS TRUSTED
+            # -------------------------------------------------
+
+            # Assume the current IP address is not trusted until
+            # a matching record is found for this user.
+            is_known_ip = False
+
+            if user:
+
+                cursor.execute(
+                    """
+                    SELECT id
+                    FROM trusted_ips
+                    WHERE user_id = %s
+                    AND ip_address = %s
+                    LIMIT 1
+                    """,
+                    (
+                       user["id"],
+                       ip_address
+                    )
+                )
+
+                trusted_ip = cursor.fetchone()
+
+                if trusted_ip:
+                    is_known_ip = True
+
+            # Assign the KR3 risk contribution.
+            # Known IP address = 0 points
+            # New/changed IP address = 2 points
+            if is_known_ip:
+                ip_risk_score = 0
+            else:
+                ip_risk_score = 2
+
+       
             # -------------------------------------------------
             # KR1: CHECK FOR ACTIVE TEMPORARY RESTRICTION
             # -------------------------------------------------
@@ -310,6 +394,18 @@ def login():
                 # A successful login starts a new authentication
                 # sequence, so the consecutive failure count is 0.
                 failed_attempts = 0
+                # -------------------------------------------------
+                # COMBINE CONTEXTUAL RISK CONTRIBUTIONS
+                # -------------------------------------------------
+
+                # For a successful password authentication, KR1
+                # contributes 0 because there is no current failed
+                # attempt. Combine the KR2 device score and KR3
+                # IP-address score to produce the contextual score.
+                risk_score = device_risk_score + ip_risk_score
+
+                # Convert the combined score into an overall risk level.
+                risk_level = classify_risk(risk_score)
 
                 cursor.execute(
                     """
@@ -321,10 +417,12 @@ def login():
                         success,
                         failed_attempts,
                         risk_score,
+                        risk_level,
                         action_taken,
                         response_time_ms
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+
                     """,
                     (
                         user["id"],
@@ -333,7 +431,8 @@ def login():
                         device_id,
                         True,
                         failed_attempts,
-                        device_risk_score,
+                        risk_score,
+                        risk_level,
                         "Login allowed",
                         response_time_ms
                     )
@@ -364,6 +463,31 @@ def login():
                     )
 
                     connection.commit()
+
+                # -------------------------------------------------
+                # KR3: REGISTER NEW TRUSTED IP ADDRESS
+                # -------------------------------------------------
+
+                # After successful authentication, trust the current
+                # IP address if it has not previously been recorded
+                # for this user.
+                if not is_known_ip:
+
+                    cursor.execute(
+                        """
+                        INSERT INTO trusted_ips (
+                            user_id,
+                            ip_address
+                        )
+                        VALUES (%s, %s)
+                        """,
+                        (
+                           user["id"],
+                           ip_address
+                        )
+                    )
+
+                    connection.commit()    
 
                 # Create the authenticated Flask session.
                 session["user_id"] = user["id"]
