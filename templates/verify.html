@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Additional Verification | Adaptive Secure Login System</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+<body>
+
+    <main class="auth-page">
+
+        <section class="auth-card">
+
+            <div class="auth-card-header">
+
+                <div class="card-label">
+                    ADAPTIVE VERIFICATION
+                </div>
+
+                <h2>
+                    Additional verification required
+                </h2>
+
+                <p>
+                    This login has been classified as Medium risk.
+                    Confirm the authentication attempt to continue.
+                </p>
+
+            </div>
+
+
+            <!-- Display Flask flash messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+
+                {% if messages %}
+
+                    <div class="flash-messages">
+
+                        {% for category, message in messages %}
+
+                            <div class="flash-message {{ category }}">
+                                {{ message }}
+                            </div>
+
+                        {% endfor %}
+
+                    </div>
+
+                {% endif %}
+
+            {% endwith %}
+
+
+            <div class="dashboard-content">
+
+                <p>
+                    The system detected a change in the authentication
+                    context, such as a new device or IP address.
+                </p>
+
+                <p>
+                    This prototype uses a confirmation step to
+                    demonstrate adaptive step-up authentication.
+                </p>
+
+            </div>
+
+
+            <form
+                method="POST"
+                action="{{ url_for('verify') }}"
+                class="auth-form"
+            >
+
+                <button
+                    type="submit"
+                    class="auth-button"
+                >
+                    Confirm login
+                </button>
+
+            </form>
+
+
+            <div class="auth-footer">
+
+                <a href="{{ url_for('login') }}">
+                    Cancel and return to login
+                </a>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</body>
+
+</html>

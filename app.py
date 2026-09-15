@@ -423,6 +423,77 @@ def login():
                 # Convert the combined score into an overall risk level.
                 risk_level = classify_risk(risk_score)
 
+
+                # -------------------------------------------------
+                # MEDIUM-RISK STEP-UP AUTHENTICATION
+                # -------------------------------------------------
+
+                # A Medium-risk login means the password is correct,
+                # but the authentication context requires an
+                # additional prototype verification step.
+                if risk_level == "Medium":
+
+                    # Record the authentication attempt before
+                    # sending the user to step-up verification.
+                    cursor.execute(
+                        """
+                        INSERT INTO login_attempts (
+                            user_id,
+                            username,
+                            ip_address,
+                            device_id,
+                            success,
+                            failed_attempts,
+                            risk_score,
+                            risk_level,
+                            action_taken,
+                            response_time_ms
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            user["id"],
+                            username,
+                            ip_address,
+                            device_id,
+                            True,
+                            failed_attempts,
+                            risk_score,
+                            risk_level,
+                            "Step-up verification required",
+                            response_time_ms
+                        )
+                    )
+
+                    connection.commit()
+
+                    # Store temporary authentication state.
+                    # The user is not fully authenticated yet.
+                    session["pending_user_id"] = user["id"]
+                    session["pending_username"] = user["username"]
+                    session["pending_device_id"] = device_id
+                    session["pending_ip_address"] = ip_address
+
+                    flash(
+                        "Medium-risk login detected. Additional verification is required.",
+                        "error"
+                    )
+
+                    response = redirect(url_for("verify"))
+
+                    # Preserve the browser identifier while
+                    # verification is pending.
+                    response.set_cookie(
+                        "device_id",
+                        device_id,
+                        max_age=60 * 60 * 24 * 30,
+                        httponly=True,
+                        samesite="Lax"
+                    )
+
+                    return response
+
+
                
 
                 cursor.execute(
@@ -736,6 +807,143 @@ def login():
                 connection.close()
 
     return render_template("login.html")
+
+# -------------------------------------------------
+# PROTOTYPE STEP-UP VERIFICATION
+# ------------------------------------------------- 
+
+
+@app.route("/verify", methods=["GET", "POST"])
+def verify():
+    """
+    Complete prototype step-up verification for a
+    Medium-risk authentication attempt.
+
+    This confirmation demonstrates adaptive step-up
+    authentication. It is not a production MFA factor.
+    """
+
+    # Only a user who has already passed the password
+    # check and entered a pending state may use this route.
+    if "pending_user_id" not in session:
+
+        flash(
+            "No additional verification is currently required.",
+            "error"
+        )
+
+        return redirect(url_for("login"))
+
+    # Display the verification page.
+    if request.method == "GET":
+        return render_template("verify.html")
+
+    # Retrieve the authentication context stored temporarily
+    # when the Medium-risk login was detected.
+    user_id = session["pending_user_id"]
+    username = session["pending_username"]
+    device_id = session["pending_device_id"]
+    ip_address = session["pending_ip_address"]
+
+    connection = None
+    cursor = None
+
+    try:
+
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        # Trust the verified device if it has not previously
+        # been registered for this user.
+        cursor.execute(
+            """
+            SELECT id
+            FROM trusted_devices
+            WHERE user_id = %s
+            AND device_id = %s
+            LIMIT 1
+            """,
+            (user_id, device_id)
+        )
+
+        if not cursor.fetchone():
+
+            cursor.execute(
+                """
+                INSERT INTO trusted_devices (
+                    user_id,
+                    device_id
+                )
+                VALUES (%s, %s)
+                """,
+                (user_id, device_id)
+            )
+
+        # Trust the verified IP address if it has not
+        # previously been registered for this user.
+        cursor.execute(
+            """
+            SELECT id
+            FROM trusted_ips
+            WHERE user_id = %s
+            AND ip_address = %s
+            LIMIT 1
+            """,
+            (user_id, ip_address)
+        )
+
+        if not cursor.fetchone():
+
+            cursor.execute(
+                """
+                INSERT INTO trusted_ips (
+                    user_id,
+                    ip_address
+                )
+                VALUES (%s, %s)
+                """,
+                (user_id, ip_address)
+            )
+
+        connection.commit()
+
+        # The step-up check has completed successfully.
+        # Create the normal authenticated session.
+        session["user_id"] = user_id
+        session["username"] = username
+
+        # Remove temporary authentication state.
+        session.pop("pending_user_id", None)
+        session.pop("pending_username", None)
+        session.pop("pending_device_id", None)
+        session.pop("pending_ip_address", None)
+
+        flash(
+            "Additional verification completed successfully.",
+            "success"
+        )
+
+        response = redirect(url_for("dashboard"))
+
+        # Preserve the verified browser identifier.
+        response.set_cookie(
+            "device_id",
+            device_id,
+            max_age=60 * 60 * 24 * 30,
+            httponly=True,
+            samesite="Lax"
+        )
+
+        return response
+
+    finally:
+
+        if cursor:
+            cursor.close()
+
+        if connection:
+            connection.close()
+  
 
 @app.route("/dashboard")
 def dashboard():
