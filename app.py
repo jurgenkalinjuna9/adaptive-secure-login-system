@@ -285,13 +285,13 @@ def login():
                     is_known_device = True
 
 
-                # Assign the KR2 risk contribution.
-                # Known device = 0 points
-                # Unknown device = 2 points
-                if is_known_device:
-                   device_risk_score = 0
-                else:
-                   device_risk_score = 2
+            # Assign the KR2 risk contribution.
+            # Known device = 0 points
+            # Unknown device = 2 points
+            if is_known_device:
+                device_risk_score = 0
+            else:
+                device_risk_score = 2
                    
 
             # -------------------------------------------------
@@ -333,15 +333,18 @@ def login():
 
        
             # -------------------------------------------------
-            # KR1: CHECK FOR ACTIVE TEMPORARY RESTRICTION
+            # ACTIVE TEMPORARY RESTRICTION CHECK
             # -------------------------------------------------
 
-            # Find the most recent KR1 restriction trigger for
-            # this username. Only the trigger event is checked,
-            # so repeated blocked attempts do not extend the timer.
+            # Find the most recent the most recent authentication event that
+            # triggered a temporary restriction for this username.
+            # This covers both the dedicated KR1 threshold and
+            # a High combined KR1 + KR2 + KR3 risk result.
             cursor.execute(
                 """
                 SELECT
+                    id,
+                    created_at,
                     TIMESTAMPDIFF(
                         SECOND,
                         created_at,
@@ -367,17 +370,30 @@ def login():
                     restriction["seconds_since_restriction"]
                 )
 
+                # Block authentication while the temporary
+                # restriction remains inside the configured window.
                 if (
-                     seconds_since_restriction
-                     < KR1_RESTRICTION_SECONDS
+                    seconds_since_restriction is not None
+                    and 0 <= seconds_since_restriction < KR1_RESTRICTION_SECONDS
                 ):
 
-                      flash(
-                          "Login temporarily restricted due to repeated failed attempts. Please try again shortly.",
-                          "error"
-                      )
+                        flash(
+                           "Login temporarily restricted due to high-risk authentication activity. Please try again shortly.",
+                           "error"
+                        )
+                        # Redirect instead of rendering directly so the
+                        # device identifier can also be preserved.
+                        response = redirect(url_for("login"))
 
-                      return render_template("login.html")
+                        response.set_cookie(
+                           "device_id",
+                            device_id,
+                            max_age=60 * 60 * 24 * 30,
+                            httponly=True,
+                            samesite="Lax"
+                        )
+                        
+                        return response
             # -------------------------------------------------
             # SUCCESSFUL AUTHENTICATION
             # -------------------------------------------------
@@ -406,6 +422,8 @@ def login():
 
                 # Convert the combined score into an overall risk level.
                 risk_level = classify_risk(risk_score)
+
+               
 
                 cursor.execute(
                     """
@@ -562,30 +580,70 @@ def login():
 
 
             # -------------------------------------------------
-            # KR1: FAILED-LOGIN RISK SCORE
+            # KR1: FAILED-LOGIN RISK CONTRIBUTION
             # -------------------------------------------------
 
-            # Assign a risk contribution based on the number
+            # Assign the KR1 contribution based on the number
             # of consecutive failed authentication attempts.
             #
             # 0-2 failures = 0 points
             # 3-4 failures = 2 points
             # 5+ failures  = 4 points
             if failed_attempts >= 5:
-                risk_score = 4
-                risk_level = "High"
+                failed_login_risk_score = 4
+               
+            elif failed_attempts >= 3:
+                failed_login_risk_score = 2
+
+            else:
+                failed_login_risk_score = 0
+               
+
+            # -------------------------------------------------
+            # COMBINED ADAPTIVE RISK SCORE
+            # -------------------------------------------------
+
+            # Combine all three risk indicators:
+            # KR1 = repeated failed login attempts
+            # KR2 = unknown/new device
+            # KR3 = unknown/changed IP address
+            risk_score = (
+                failed_login_risk_score
+                + device_risk_score
+                + ip_risk_score
+            )
+
+            # Convert the total score into one overall
+            # Low, Medium or High risk level.
+            risk_level = classify_risk(risk_score)
+
+            # Preserve KR1 escalation for repeated failed attempts.
+            # Three or four consecutive failures must be treated
+            # as at least Medium risk even when the contextual
+            # indicators are trusted.
+            if failed_attempts >= 3 and failed_attempts < 5:
+                if risk_level == "Low":
+                    risk_level = "Medium" 
+
+
+            # -------------------------------------------------
+            # ADAPTIVE RESPONSE
+            # -------------------------------------------------
+
+            # Five or more consecutive failed attempts trigger
+            # the dedicated KR1 restriction regardless of the
+            # combined score.
+            if failed_attempts >= 5:
                 action_taken = "Temporary restriction recommended"
 
-            elif failed_attempts >= 3:
-                risk_score = 2
-                risk_level = "Medium"
+            elif risk_level == "High":
+                action_taken = "Temporary restriction recommended"    
+
+            elif risk_level == "Medium":
                 action_taken = "Additional verification recommended"
 
             else:
-               risk_score = 0
-               risk_level = "Low"
-               action_taken = "Login rejected"
-
+                action_taken = "Login rejected"
 
            # Measure the total authentication processing time.
             response_time_ms = (
@@ -598,12 +656,15 @@ def login():
             user_id = user["id"] if user else None
 
             # Record the failed authentication attempt.
+            # The device identifier is stored so KR2 can be
+            # evaluated and demonstrated for failed logins.
             cursor.execute(
                 """
                 INSERT INTO login_attempts (
                     user_id,
                     username,
                     ip_address,
+                    device_id,
                     success,
                     failed_attempts,
                     risk_score,
@@ -611,12 +672,13 @@ def login():
                     action_taken,
                     response_time_ms
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     user_id,
                     username,
                     ip_address,
+                    device_id,
                     False,
                     failed_attempts,
                     risk_score,
@@ -649,6 +711,21 @@ def login():
                    "Invalid username or password.",
                    "error"
                 )
+            # Preserve the device identifier after a failed login
+            # so repeated attempts from the same browser can be
+            # recognised as coming from the same device.
+            response = redirect(url_for("login"))
+
+            response.set_cookie(
+                "device_id",
+                device_id,
+                max_age=60 * 60 * 24 * 30,
+                httponly=True,
+                samesite="Lax"
+            )
+
+            return response
+
         finally:
 
             # Always release database resources.
